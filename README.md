@@ -221,12 +221,145 @@ resource "aws_autoscaling_group" "asg" {
 ```
 **Create output.tf**
 
+```bash
 output "url" {
-  value = "http://{aws_elb.clb.dns_name}"
+  value = aws_elb.clb.dns_name
  }
+
+output "public_ips" {
+ value = data.aws_instances.ec.public_ips
+ }
+
+
+```
+   
+   Now the terraform part is completed and now we can start ansible part. 
+   
+   ## create play book
+   
+   Here we have fetch/call public IP from terraform to ansible.
+   
+   ```bash
+  # vim main.yml
+
+
+- name: "setup AWS infra using ansible"
+  hosts: localhost
+  vars:
+    - state: present
+    - region: ap-south-1
+  tasks:
+
+
+    - name: "terraform module" 
+      community.general.terraform:
+        variables_files: "variable.tfvars"
+        project_path: '/home/ec2-user/project/'
+        state: "{{ state }}"
+        force_init: true
+      register: ec
  
- ouutput "ip"
-   value = data.aws_instances.ec.
+    - name: "dynamic inventory"
+      add_host:
+        hostname: '{{ item}}'
+        ansible_host: '{{ item}}'
+        ansible_port: 22
+        group:
+          - new
+        ansible_ssh_private_key_file: "/home/ec2-user/project/testkey"
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+      with_items: "{{ec.outputs.public_ips.value}}"
+
+
+
+- name: "deploment from git"
+  hosts: new
+  become: true
+  serial: 1
+  vars:
+    packages:
+      - httpd
+      - php
+      - git
+
+  tasks:
+
+    - name: "install packages"
+      yum:
+        name: "{{packages}}"
+        state: present
+      register: check
+
+    - name: "restarting"
+      when: check.changed
+      service:
+        name: httpd
+        state: restarted
+        enabled: true
+
+    - name: "clone git"
+      git:
+        clone: yes
+        repo: https://github.com/radin-lawrence/aws-elb-site.git
+        dest: /var/website/
+      register: hub
+
+    - name: "make the instance down"
+      when: hub.changed
+      file:
+        path: /var/www/html/health.html
+        mode: 0000
+
+    - name: "waitin to connection draining"
+      when: hub.changed
+      wait_for:
+        timeout: 30
+      
+    - name: "copy to doc root"
+      when: hub.changed
+      copy:
+        src: /var/website/
+        dest: /var/www/html/
+        remote_src: yes
+        owner: apache
+        group: apache
+
+    - name: "instance up"
+      when: hub.changed
+      file:
+        path: /var/www/html/health.html
+        mode: 0644
+
+    - name: "waitin to connection up"
+      when: hub.changed
+      wait_for:
+        timeout: 22
+        
+```
+ **Check syntax**
+ 
+ Once the playbook is created, we need to check the syntax and execute the playbook:
+ 
+ ```bash
+  ansible-playbook main.yml --syntax-check
+ ```
+
+**Execute the playbook**
+ 
+ ```bash
+  ansible-playbook main.yml
+ ```
+ Now our setup is complete and you can point your CLB DNS name to the domain name.
+
+
+ 
+## Conclusion
+This is a classic load balancer with provisioning using ansible and terraform with serial keyword. Please contact me when you encounter any difficulty error while using this terrform code. Thank you and have a great day!
+
+ ### ⚙️ Connect with Me
+<p align="center">
+<a href="https://www.linkedin.com/in/radin-lawrence-8b3270102/"><img src="https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white"/></a>
+<a href="mailto:radin.lawrence@gmail.com"><img src="https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white"/></a>
 
 
 
