@@ -80,7 +80,7 @@ data "aws_instances" "ec" {
 
 ```bash
 # ------------------------
-# Import ssh key pair
+# create & Import ssh key pair
 # -----------------------
 
 resource "aws_key_pair" "mykey" {
