@@ -70,10 +70,10 @@ Data sources in Terraform are used to get information about resources external t
 
 ```bash
 
-Example Usage
 data "aws_instances" "ec" {
   instance_tags = {
     Name = "${var.project}"
+   }
   }
 ```
 **Create main.tf file**
